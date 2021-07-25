@@ -33,3 +33,6 @@ def test_command_init_scenario(temp_dir):
 
         cmd = ["sudo", "molecule", "check", "-s", "test-scenario"]
         assert run_command(cmd).returncode == 0
+
+        cmd = ["sudo", "molecule", "destroy", "-s", "test-scenario"]
+        assert run_command(cmd).returncode == 0
