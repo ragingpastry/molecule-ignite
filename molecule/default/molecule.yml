@@ -1,0 +1,10 @@
+---
+driver:
+  name: ignite
+platforms:
+  - name: instance
+
+provisioner:
+  name: ansible
+  cpus: 1
+  memory: 1GB

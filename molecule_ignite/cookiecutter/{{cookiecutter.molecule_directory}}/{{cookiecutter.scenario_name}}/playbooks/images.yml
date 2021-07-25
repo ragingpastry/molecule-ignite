@@ -1,0 +1,38 @@
+{% raw -%}
+- set_fact:
+    kernel_name: "{{ item.kernel_name | default(default_kernel.name) }}"
+
+- set_fact:
+    kernel_tag: "{{ item.kernel_tag | default(default_kernel.tag) }}"
+
+- set_fact:
+    image_name: "{{ item.image_name | default(default_image.name) }}"
+
+- set_fact:
+    image_tag: "{{ item.image_tag | default(default_image.tag) }}"
+
+- name: Check kernel state
+  command: |
+    ignite inspect kernel {{ kernel_name }}:{{ kernel_tag }}
+  ignore_errors: True
+  register: kernel_exists
+
+- name: Import kernel image
+  run_once: True
+  command: |
+    ignite kernel import  {{ kernel_name }}:{{ kernel_tag }}
+  when: kernel_exists.rc == 1
+
+- name: Check image state
+  command: |
+    ignite inspect image {{ image_name }}:{{ image_tag }}
+  ignore_errors: True
+  register: image_exists
+
+- name: Import image
+  run_once: true
+  command: |
+    ignite image import {{ image_name }}:{{ image_tag }}
+  when: image_exists.rc == 1
+
+{%- endraw %}

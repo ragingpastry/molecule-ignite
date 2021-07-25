@@ -1,0 +1,84 @@
+---
+{% raw -%}
+- name: Create
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: True
+  no_log: "{{ molecule_no_log }}"
+  vars:
+    ssh_port: 22
+    default_kernel:
+      name: weaveworks/ignite-kernel
+      tag: 4.14.227
+    default_image:
+      name: weaveworks/ignite-ubuntu
+      tag: latest
+  tasks:
+    - include_tasks: playbooks/images.yml
+      loop: "{{ molecule_yml.platforms | flatten(levels=1) }}"
+
+    - name: Create VM
+      command: |
+        ignite run {{ item.image_name | default(default_image.name) }}:{{ item.image_tag | default(default_image.tag) }}
+        --cpus {{ item.cpus }}
+        --memory {{ item.memory }}
+        {% if item.public_key_path is defined %}--ssh={{ item.public_key_path }}{% else %}--ssh {% endif %}
+        --name {{ item.name }}
+      loop: "{{ molecule_yml.platforms | flatten(levels=1) }}"
+      register: server
+      async: 7200
+      poll: 0
+
+    - name: Wait for instance creation to complete
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      register: os_jobs
+      until: os_jobs.finished
+      retries: 300
+      loop: "{{ server.results | flatten(levels=1) }}"
+
+    - name: Inspect running VM
+      command: |
+        ignite inspect vm {{ item.name }}
+      register: running_vm
+      loop: "{{ molecule_yml.platforms | flatten(levels=1) }}"
+
+    - set_fact:
+        vm_results: "{{ item.stdout | from_json }}"
+      register: vm_results_fact
+      loop: "{{ running_vm.results | flatten(levels=1) }}"
+
+    - set_fact:
+        vm_conf: "{{ vm_results_fact.results | map(attribute='ansible_facts.vm_results') | list }}"
+
+    - name: Populate instance config dict
+      set_fact:
+        instance_conf_dict: {
+          'instance': "{{ item.metadata.name }}",
+          'instance_id': "{{ item.metadata.uid }}",
+          'address': "{{ item.status.network.ipAddresses[0] }}",
+          'user': "{{ (molecule_yml.platforms | selectattr('name', 'search', item.metadata.name) | list | first).user }}",
+          'port': "{{ item.port | default('22') }}",
+          'identity_file': "/var/lib/firecracker/vm/{{ item.metadata.uid }}/id_{{ item.metadata.uid }}",
+        }
+      register: instance_config_dict
+      loop: "{{ vm_conf | flatten(levels=1) }}"
+      when: server.changed | bool
+
+    - name: Convert instance config dict to a list
+      set_fact:
+        instance_conf: "{{ instance_config_dict.results | map(attribute='ansible_facts.instance_conf_dict') | list }}"
+      when: server.changed | bool
+
+    - debug:
+        var: instance_conf
+
+    - name: Dump instance config
+      copy:
+        content: "{{ instance_conf | to_json | from_json | to_yaml }}"
+        dest: "{{ molecule_instance_config }}"
+        owner: crepe
+      when: server.changed | bool
+
+{%- endraw %}

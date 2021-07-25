@@ -1,0 +1,14 @@
+---
+dependency:
+  name: {{ cookiecutter.dependency_name }}
+driver:
+  name: {{ cookiecutter.driver_name }}
+platforms:
+  - name: molecule-{{ cookiecutter.role_name }}
+    cpus: 1
+    memory: 1GB
+    user: root
+provisioner:
+  name: {{ cookiecutter.provisioner_name }}
+verifier:
+  name: {{ cookiecutter.verifier_name }}
